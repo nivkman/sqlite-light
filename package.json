@@ -1,7 +1,7 @@
 {
   "name": "sqlite-light",
-  "description": "Zero-dependency SQLite for Node.js with Mongoose-like models. One-line connection on the built-in node:sqlite \u2014 no install step, no native build.",
-  "version": "0.1.0",
+  "description": "Zero-dependency SQLite for Node.js with Mongoose-like models. One-line connection on the built-in node:sqlite — no install step, no native build.",
+  "version": "0.1.1",
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "exports": {
