@@ -24,6 +24,7 @@ User.find({ age: { $gte: 21 } }); // [{ id: 1, name: 'Niv', age: 31 }]
 - 🔁 **Transactions** - Auto-rollback on error, safe to nest (savepoints)
 - 🚀 **Synchronous API** - No `await` needed. SQLite is in-process, so calls are fast and simple
 - 🛡️ **Safe by Default** - Values are always bound parameters, identifiers are quoted, and `update`/`delete` refuse to run without conditions
+- 🏷️ **TypeScript Types** - Rows are typed from your schema, wrong columns are compile errors
 - 🔓 **Full Access** - Drop to raw SQL at any time, or use the underlying `DatabaseSync` via `db.raw`
 
 ## Requirements
@@ -91,6 +92,23 @@ db.transaction(() => {
   Account.updateById(2, { balance: Account.findById(2).balance + 100 });
 }); // throws → everything rolls back
 ```
+
+### TypeScript
+
+Types ship with the package, and a schema gives you typed rows automatically:
+
+```ts
+const User = db.model('users', {
+  name: { type: 'string', required: true },
+  age: 'integer',
+}, { timestamps: true });
+
+const user = User.findById(1);  // { id: number; name: string; age: number | null; createdAt: Date; updatedAt: Date } | null
+User.find({ age: { $gte: 18 } });  // ✅
+User.find({ agee: 18 });           // ❌ type error: unknown column
+```
+
+For a model without a schema, pass the row type yourself: `db.model<{ id: number; msg: string }>('logs')`.
 
 ## API
 

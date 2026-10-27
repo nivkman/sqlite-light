@@ -1,15 +1,22 @@
 {
   "name": "sqlite-light",
-  "description": "Zero-dependency SQLite for Node.js with Mongoose-like models. One-line connection on the built-in node:sqlite — no install step, no native build.",
+  "description": "Zero-dependency SQLite for Node.js with Mongoose-like models. One-line connection on the built-in node:sqlite \u2014 no install step, no native build.",
   "version": "0.1.0",
   "main": "src/index.js",
-  "exports": "./src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
   "type": "module",
   "files": [
     "src/"
   ],
   "scripts": {
-    "test": "node --test --no-warnings=ExperimentalWarning"
+    "test": "node --test --no-warnings=ExperimentalWarning test/*.test.js",
+    "test:types": "tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 --types node test/types/check.ts"
   },
   "repository": {
     "type": "git",
@@ -30,5 +37,9 @@
   "license": "MIT",
   "engines": {
     "node": ">=22.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
   }
 }

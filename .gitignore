@@ -9,3 +9,8 @@ dist/
 build/
 coverage/
 .nyc_output/
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
