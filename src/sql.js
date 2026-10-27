@@ -12,8 +12,14 @@ export function quote(name) {
   return `"${String(name).replaceAll('"', '""')}"`;
 }
 
-function isPlainObject(value) {
-  return value !== null && typeof value === 'object' && value.constructor === Object;
+export function isPlainObject(value) {
+  if (value === null || typeof value !== 'object') return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+export function defined(object = {}) {
+  return Object.entries(object ?? {}).filter(([, value]) => value !== undefined);
 }
 
 export function encode(value) {
@@ -25,6 +31,7 @@ export function encode(value) {
 }
 
 function inClause(column, list) {
+  if (!Array.isArray(list)) throw new Error(`sqlite-light: $in / $nin on ${column} need an array`);
   if (list.length === 0) return { sql: '0', values: [] };
   const marks = list.map(() => '?').join(', ');
   return { sql: `${column} IN (${marks})`, values: list.map(encode) };
@@ -47,11 +54,13 @@ function conditionParts(key, value) {
   const column = quote(key);
   if (Array.isArray(value)) return [compare(column, '$in', value)];
   if (!isPlainObject(value)) return [compare(column, '$eq', value)];
-  return Object.entries(value).map(([op, v]) => compare(column, op, v));
+  const operators = defined(value);
+  if (operators.length === 0) throw new Error(`sqlite-light: empty operator object for ${column}`);
+  return operators.map(([op, v]) => compare(column, op, v));
 }
 
 export function buildWhere(conditions = {}) {
-  const parts = Object.entries(conditions).flatMap(([k, v]) => conditionParts(k, v));
+  const parts = defined(conditions).flatMap(([k, v]) => conditionParts(k, v));
   if (parts.length === 0) return { sql: '', values: [] };
   const sql = ` WHERE ${parts.map(p => p.sql).join(' AND ')}`;
   return { sql, values: parts.flatMap(p => p.values) };
@@ -82,7 +91,7 @@ function toInt(value) {
 }
 
 export function buildInsert(table, data) {
-  const keys = Object.keys(data);
+  const keys = defined(data).map(([key]) => key);
   if (keys.length === 0) return { sql: `INSERT INTO ${quote(table)} DEFAULT VALUES RETURNING *`, values: [] };
   const columns = keys.map(quote).join(', ');
   const marks = keys.map(() => '?').join(', ');
@@ -91,7 +100,7 @@ export function buildInsert(table, data) {
 }
 
 export function buildUpdate(table, data, conditions) {
-  const keys = Object.keys(data || {});
+  const keys = defined(data).map(([key]) => key);
   if (keys.length === 0) throw new Error('sqlite-light: update() needs at least one field to set');
   const set = keys.map(k => `${quote(k)} = ?`).join(', ');
   const where = buildWhere(conditions);

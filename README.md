@@ -122,6 +122,7 @@ Opens (or creates) a database. `path` defaults to `':memory:'`.
 | `foreignKeys` | boolean | `true` | Enforce foreign key constraints |
 | `busyTimeout` | number | `5000` | Milliseconds to wait when the database is locked |
 | `readOnly` | boolean | `false` | Open the database read-only |
+| `bigInts` | boolean | `false` | Read integers as `BigInt`. Without it, writing an integer beyond `Number.MAX_SAFE_INTEGER` throws instead of being stored |
 | `logger` | object | silent | Any logger with `debug`/`info`/`error` (e.g. a `logger-standard` instance). SQL is logged at `debug` |
 
 ### Database Methods
@@ -158,7 +159,7 @@ Every table gets an `id INTEGER PRIMARY KEY AUTOINCREMENT` column.
 | `number` | `REAL` | number |
 | `boolean` | `INTEGER` (0/1) | boolean |
 | `date` | `TEXT` (ISO 8601) | `Date` |
-| `json` | `TEXT` | object / array |
+| `json` | `TEXT` | any JSON value (object, array, string, number, boolean) |
 | `blob` | `BLOB` | `Uint8Array` |
 
 | Field option | Description |
@@ -204,6 +205,9 @@ User.find({ email: { $like: '%@gmail.com' } });
 ```
 
 Conditions are combined with `AND`. For `OR`, joins, or anything else, use `db.query()`.
+
+- Keys whose value is `undefined` are ignored — in conditions and in `create`/`update` data — so optional fields like `{ age: req.body.age }` behave as you'd expect, and a column's default still applies. `update`/`delete` throw if nothing is left to filter on.
+- SQL `NULL` rules apply: `$ne`, `$nin`, `$gt` and friends never match rows where the column is `NULL`. To include them, query `null` explicitly (or use `db.query()` with `OR ... IS NULL`).
 
 ### Find Options
 

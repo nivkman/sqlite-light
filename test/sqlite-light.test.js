@@ -179,3 +179,103 @@ test('readOnly connections reject writes', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('empty operator objects and undefined filters cannot bypass the update/delete guard', () => {
+  const { User } = setup();
+  User.createMany([{ name: 'A' }, { name: 'B' }]);
+  assert.throws(() => User.delete({ name: {} }), /empty operator object/);
+  assert.throws(() => User.delete({ name: undefined }), /needs conditions/);
+  assert.throws(() => User.update({ name: { $gt: undefined } }, { name: 'X' }), /empty operator object/);
+  assert.throws(() => User.find({ name: { $in: 'A' } }), /need an array/);
+  assert.equal(User.count(), 2);
+});
+
+test('undefined fields are skipped, so defaults apply and updates keep values', () => {
+  const { User } = setup();
+  const user = User.create({ name: 'A', age: 5, active: undefined });
+  assert.equal(user.active, true);
+  assert.equal(User.updateById(user.id, { name: 'B', age: undefined }).age, 5);
+  assert.equal(User.find(null).length, 1);
+});
+
+test('a failed COMMIT rolls back cleanly and keeps the connection usable', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sqlite-light-'));
+  try {
+    const db = connectDB(join(dir, 'fk.db'));
+    db.exec('CREATE TABLE parent (id INTEGER PRIMARY KEY)');
+    db.exec('CREATE TABLE child (id INTEGER PRIMARY KEY, pid INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)');
+    const Parent = db.model('parent');
+    assert.throws(() => db.transaction(() => db.model('child').create({ pid: 999 })), /FOREIGN KEY/);
+    Parent.create({});
+    db.transaction(() => Parent.create({}));
+    db.close();
+    assert.equal(connectDB(join(dir, 'fk.db')).model('parent').count(), 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('statement cache is cleared after schema changes', () => {
+  const db = connectDB();
+  const User = db.model('users', { name: 'string' });
+  User.create({ name: 'A' });
+  User.find();
+  db.exec('ALTER TABLE users ADD COLUMN age INTEGER DEFAULT 7');
+  assert.equal(User.find()[0].age, 7);
+  db.run('ALTER TABLE users ADD COLUMN city TEXT');
+  assert.ok('city' in User.find()[0]);
+  db.exec('DROP TABLE users');
+  db.model('users', { only: 'string' }).create({ only: 'x' });
+  assert.deepEqual(db.model('users').find(), [{ id: 1, only: 'x' }]);
+});
+
+test('json columns store any JSON value, including strings, booleans and numbers', () => {
+  const db = connectDB();
+  const Doc = db.model('docs', { meta: 'json', fallback: { type: 'json', default: { a: 1 } } });
+  for (const meta of ['hello', true, false, 42, null, ['x'], { k: 'v' }]) {
+    assert.deepEqual(Doc.create({ meta }).meta, meta);
+  }
+  assert.deepEqual(Doc.findById(1).fallback, { a: 1 });
+  db.run("INSERT INTO docs (meta) VALUES ('not json')");
+  assert.equal(Doc.find().at(-1).meta, 'not json');
+});
+
+test('default: null is a real NULL', () => {
+  const db = connectDB();
+  const User = db.model('users', { nick: { type: 'string', default: null } });
+  assert.equal(User.create({}).nick, null);
+});
+
+test('bigInts option reads large integers as BigInt', () => {
+  const db = connectDB(':memory:', { bigInts: true });
+  const Big = db.model('big', { v: 'integer' });
+  const row = Big.create({ v: 2n ** 60n });
+  assert.equal(row.v, 2n ** 60n);
+  assert.equal(typeof db.run('INSERT INTO big (v) VALUES (1)').lastInsertRowid, 'bigint');
+});
+
+test('without bigInts, unsafe integers are rejected before they are written', () => {
+  const db = connectDB();
+  const Big = db.model('big', { v: 'integer' });
+  assert.throws(() => Big.create({ v: 2n ** 60n }), /bigInts: true/);
+  assert.equal(Big.count(), 0);
+  assert.equal(Big.create({ v: 5n }).v, 5);
+});
+
+test('booleans written by other tools decode sensibly', () => {
+  const { db, User } = setup();
+  db.run("INSERT INTO users (name, active) VALUES ('A', 2), ('B', 'true'), ('C', 0)");
+  assert.deepEqual(User.find().map(u => u.active), [true, true, false]);
+});
+
+test('transaction keeps the original error and survives throw null', () => {
+  const { db, User } = setup();
+  assert.throws(() => db.transaction(() => { throw null; }), e => e === null);
+  db.transaction(() => User.create({ name: 'ok' }));
+  assert.equal(User.count(), 1);
+});
+
+test('busyTimeout must be a non-negative integer', () => {
+  assert.throws(() => connectDB(':memory:', { busyTimeout: 'abc' }), /busyTimeout/);
+  assert.equal(connectDB(':memory:', { busyTimeout: 250 }).get('PRAGMA busy_timeout').timeout, 250);
+});

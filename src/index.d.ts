@@ -16,14 +16,13 @@ export interface ModelOptions {
   timestamps?: boolean;
 }
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 type TypeOf<T extends FieldType> =
   T extends 'string' | 'text' ? string :
   T extends 'number' | 'integer' ? number :
   T extends 'boolean' ? boolean :
   T extends 'date' ? Date :
-  T extends 'json' ? JsonValue :
+  T extends 'json' ? any :
   T extends 'blob' ? Uint8Array :
   unknown;
 
@@ -84,7 +83,8 @@ export type Params = unknown[] | Record<string, unknown> | string | number | big
 
 export interface RunResult {
   changes: number;
-  lastInsertRowid: number;
+  /** A `bigint` when connected with `{ bigInts: true }`. */
+  lastInsertRowid: number | bigint;
 }
 
 export interface Logger {
@@ -101,6 +101,8 @@ export interface ConnectOptions {
   /** Milliseconds to wait on a locked database. Default: `5000` */
   busyTimeout?: number;
   readOnly?: boolean;
+  /** Read integers as BigInt (`lastInsertRowid` too). Without it, unsafe integers are rejected on write. */
+  bigInts?: boolean;
   logger?: Logger;
 }
 

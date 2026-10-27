@@ -39,4 +39,6 @@ rows[0].n.toFixed();
 db.run('UPDATE users SET active = ?', [false]).changes.toFixed();
 const total: number = db.transaction(() => User.count());
 db.raw.prepare('SELECT 1');
+const tags = User.findById(1)?.tags;
+tags?.map((t: string) => t.toUpperCase());
 void maybe; void total;

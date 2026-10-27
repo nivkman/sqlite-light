@@ -1,8 +1,9 @@
 import { quote, buildWhere, buildOptions, buildInsert, buildUpdate } from './sql.js';
-import { normalizeSchema, createTableSql, decodeRow } from './schema.js';
+import { normalizeSchema, createTableSql, decodeRow, encodeRow } from './schema.js';
 
-function requireConditions(conditions, method) {
-  if (Object.keys(conditions || {}).length > 0) return;
+function requireWhere(conditions, method) {
+  const where = buildWhere(conditions);
+  if (where.sql) return where;
   throw new Error(`sqlite-light: ${method}() needs conditions — refusing to touch every row`);
 }
 
@@ -45,7 +46,7 @@ export class Model {
   create(data = {}) {
     const now = new Date();
     const row = this.#timestamps ? { createdAt: now, updatedAt: now, ...data } : data;
-    const { sql, values } = buildInsert(this.#table, row);
+    const { sql, values } = buildInsert(this.#table, encodeRow(row, this.#fields));
     return this.#rows(sql, values)[0];
   }
 
@@ -54,9 +55,9 @@ export class Model {
   }
 
   update(conditions, data) {
-    requireConditions(conditions, 'update');
+    requireWhere(conditions, 'update');
     const changes = this.#timestamps ? { updatedAt: new Date(), ...data } : data;
-    const { sql, values } = buildUpdate(this.#table, changes, conditions);
+    const { sql, values } = buildUpdate(this.#table, encodeRow(changes, this.#fields), conditions);
     return this.#rows(sql, values);
   }
 
@@ -65,8 +66,7 @@ export class Model {
   }
 
   delete(conditions) {
-    requireConditions(conditions, 'delete');
-    const where = buildWhere(conditions);
+    const where = requireWhere(conditions, 'delete');
     return this.#rows(`DELETE FROM ${quote(this.#table)}${where.sql} RETURNING *`, where.values);
   }
 

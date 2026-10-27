@@ -27,8 +27,9 @@ export function normalizeSchema(schema = {}, options = {}) {
   return fields;
 }
 
-function literal(value) {
-  const encoded = encode(value);
+function literal(field) {
+  if (field.default === null) return 'NULL';
+  const encoded = field.type === 'json' ? JSON.stringify(field.default) : encode(field.default);
   if (typeof encoded === 'number') return String(encoded);
   return `'${String(encoded).replaceAll("'", "''")}'`;
 }
@@ -37,7 +38,7 @@ function columnSql(name, field) {
   const parts = [quote(name), TYPES[field.type]];
   if (field.required) parts.push('NOT NULL');
   if (field.unique) parts.push('UNIQUE');
-  if (field.default !== undefined) parts.push(`DEFAULT ${literal(field.default)}`);
+  if (field.default !== undefined) parts.push(`DEFAULT ${literal(field)}`);
   return parts.join(' ');
 }
 
@@ -47,10 +48,26 @@ export function createTableSql(table, fields) {
   return `CREATE TABLE IF NOT EXISTS ${quote(table)} (${all})`;
 }
 
+function parseJson(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+export function encodeRow(data, fields) {
+  const row = { ...data };
+  for (const [name, field] of Object.entries(fields)) {
+    if (field.type === 'json' && row[name] != null) row[name] = JSON.stringify(row[name]);
+  }
+  return row;
+}
+
 function decodeValue(value, type) {
   if (value === null || value === undefined) return value;
-  if (type === 'boolean') return value === 1 || value === 1n;
-  if (type === 'json') return JSON.parse(value);
+  if (type === 'boolean') return typeof value === 'string' ? value === 'true' || value === '1' : Number(value) !== 0;
+  if (type === 'json') return parseJson(value);
   if (type === 'date') return new Date(value);
   return value;
 }
